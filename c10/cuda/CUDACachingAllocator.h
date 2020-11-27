@@ -119,6 +119,10 @@ C10_CUDA_API DeviceStats getDeviceStats(int device);
 C10_CUDA_API void resetAccumulatedStats(int device);
 C10_CUDA_API void resetPeakStats(int device);
 C10_CUDA_API std::vector<SegmentInfo> snapshot();
+C10_CUDA_API std::unique_ptr<std::vector<DataPtr>> collectCapturedDevicePointers();
+
+C10_CUDA_API Stat getGraphAllocatedBytes();
+C10_CUDA_API Stat getGraphAllocatedNums();
 
 C10_CUDA_API std::mutex* getFreeMutex();
 

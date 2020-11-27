@@ -536,3 +536,4 @@ from . import sparse
 from . import profiler
 from . import nvtx
 from . import amp
+from .nimble import Nimble

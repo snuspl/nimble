@@ -12,6 +12,8 @@
 
 #include <ATen/ATen.h>
 #include <c10/util/Exception.h>
+#include <c10/cuda/CUDAStream.h>
+#include <ATen/cuda/AutoStream.h>
 
 #include <list>
 #include <memory>
@@ -154,8 +156,16 @@ namespace impl {
     std::lock_guard<std::mutex> lock(autograd_meta->mutex_);
 
     auto result = autograd_meta->grad_accumulator_.lock();
-    if (result)
-      return result;
+    if (result){
+      auto current_stream = at::cuda::getCurrentCUDAStream();
+      if (current_stream.is_capture_stream()){
+        AccumulateGrad* acc_node = static_cast<AccumulateGrad*>(result.get());
+        acc_node->captured_stream = current_stream.unwrap();
+        return result;
+      } else{
+        return result;
+      }
+    }
 
     c10::raw::intrusive_ptr::incref(self.unsafeGetTensorImpl());
     auto intrusive_from_this = c10::intrusive_ptr<at::TensorImpl>::reclaim(self.unsafeGetTensorImpl());

@@ -13,6 +13,7 @@
 #include <torch/csrc/cuda/Storage.h>
 #include <torch/csrc/cuda/Stream.h>
 #include <torch/csrc/cuda/Event.h>
+#include <torch/csrc/cuda/Graph.h>
 #include <torch/csrc/cuda/utils.h>
 
 #endif

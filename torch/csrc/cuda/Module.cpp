@@ -7,6 +7,8 @@
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/CUDAGeneratorImpl.h>
+#include <ATen/cuda/Capture.h>
+#include <ATen/cuda/AutoStream.h>
 #include <c10/cuda/CUDAFunctions.h>
 #include <c10/cuda/CUDACachingAllocator.h>
 #ifdef USE_NCCL
@@ -316,6 +318,15 @@ PyObject * THCPModule_memoryStats(PyObject *_unused, PyObject *arg)
   result["reserved_bytes"] = statArrayToDict(stats.reserved_bytes);
   result["active_bytes"] = statArrayToDict(stats.active_bytes);
   result["inactive_split_bytes"] = statArrayToDict(stats.inactive_split_bytes);
+  
+  const auto graphStatToDict = [=](const Stat& graphStat) {
+    py::dict dict;
+    dict["all"] = statToDict(graphStat);
+    return dict;
+  };
+
+  result["graph_bytes"] = graphStatToDict(c10::cuda::CUDACachingAllocator::getGraphAllocatedBytes());
+  result["graph_allocation"] = graphStatToDict(c10::cuda::CUDACachingAllocator::getGraphAllocatedNums());
 
   return result.release().ptr();
   END_HANDLE_TH_ERRORS
@@ -483,6 +494,124 @@ PyObject * THCPModule_getCurrentBlasHandle_wrap(PyObject *self, PyObject *noargs
   END_HANDLE_TH_ERRORS
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Functions for CUDA Graphs
+////////////////////////////////////////////////////////////////////////////////
+
+PyObject * THCPModule_getCaptureStream_wrap(PyObject * /* unused */, PyObject *is_origin)
+{
+  HANDLE_TH_ERRORS
+  THPUtils_assert(PyBool_Check(is_origin), "invalid argument, is_origin must be a bool");
+  bool origin = THPUtils_unpackBool(is_origin);
+  return PyLong_FromUnsignedLongLong(
+    at::cuda::getCaptureStreamFromPool(origin).pack());
+  END_HANDLE_TH_ERRORS
+}
+
+PyObject * THCPModule_setAutoSteamMode_wrap(PyObject * /* unused */, PyObject *enable)
+{
+  HANDLE_TH_ERRORS
+  THPUtils_assert(PyBool_Check(enable), "invalid argument, is_origin must be a bool");
+  bool enabled = THPUtils_unpackBool(enable);
+  at::cuda::autostream::AutoStreamMode::set_enabled(enabled);
+  Py_RETURN_NONE;
+  END_HANDLE_TH_ERRORS
+}
+
+PyObject * THCPModule_getAutoSteamMode_wrap(PyObject * /* unused */, PyObject *noargs)
+{
+  HANDLE_TH_ERRORS
+  bool enabled = at::cuda::autostream::AutoStreamMode::is_enabled();
+  if (enabled) {
+    return PyBool_FromLong(1);
+  } else {
+    return PyBool_FromLong(0);
+  }
+  END_HANDLE_TH_ERRORS
+}
+
+PyObject * THCPModule_beginStreamPrecapture_wrap(PyObject * /* unused */, PyObject *args)
+{
+  HANDLE_TH_ERRORS
+  PyObject *py_stream = nullptr;
+  PyObject *py_multi_stream = nullptr;
+  if (!PyArg_ParseTuple(args, "OO", &py_stream, &py_multi_stream)) {
+    return nullptr;
+  }
+  THPUtils_assert(PyLong_Check(py_stream), "invalid stream");
+  uint64_t bits = PyLong_AsUnsignedLongLong(py_stream);
+  if (bits == static_cast<uint64_t>(-1) && PyErr_Occurred()) {
+    throw python_error();
+  }
+  auto stream = at::cuda::CUDAStream::unpack(bits);
+  THPUtils_assert(PyBool_Check(py_multi_stream), "invalid argument, multi_stream must be a bool");
+  bool multi_stream = THPUtils_unpackBool(py_multi_stream);
+  at::cuda::beginCUDAStreamPrecapture(stream, multi_stream);
+  Py_RETURN_NONE;
+  END_HANDLE_TH_ERRORS
+}
+
+PyObject * THCPModule_endStreamPrecapture_wrap(PyObject * /* unused */, PyObject *obj)
+{
+  HANDLE_TH_ERRORS
+  THPUtils_assert(PyLong_Check(obj), "invalid stream");
+  uint64_t bits = PyLong_AsUnsignedLongLong(obj);
+  if (bits == static_cast<uint64_t>(-1) && PyErr_Occurred()) {
+    throw python_error();
+  }
+  auto stream = at::cuda::CUDAStream::unpack(bits);
+  at::cuda::endCUDAStreamPrecapture(stream);
+  Py_RETURN_NONE;
+  END_HANDLE_TH_ERRORS
+}
+
+PyObject * THCPModule_beginStreamCapture_wrap(PyObject * /* unused */, PyObject *args)
+{
+  HANDLE_TH_ERRORS
+  PyObject *py_stream = nullptr;
+  PyObject *py_multi_stream = nullptr;
+  PyObject *py_relaxed = nullptr;
+  if (!PyArg_ParseTuple(args, "OOO", &py_stream, &py_multi_stream, &py_relaxed)) {
+    return nullptr;
+  }
+  THPUtils_assert(PyLong_Check(py_stream), "invalid stream");
+  uint64_t bits = PyLong_AsUnsignedLongLong(py_stream);
+  if (bits == static_cast<uint64_t>(-1) && PyErr_Occurred()) {
+    throw python_error();
+  }
+  auto stream = at::cuda::CUDAStream::unpack(bits);
+  THPUtils_assert(PyBool_Check(py_multi_stream), "invalid argument, multi_stream must be a bool");
+  bool multi_stream = THPUtils_unpackBool(py_multi_stream);
+  THPUtils_assert(PyBool_Check(py_relaxed), "invalid argument, relaxed must be a bool");
+  bool relaxed = THPUtils_unpackBool(py_relaxed);
+  at::cuda::beginCUDAStreamCapture(stream, multi_stream, relaxed);
+  Py_RETURN_NONE;
+  END_HANDLE_TH_ERRORS
+}
+
+PyObject * THCPModule_endStreamCapture_wrap(PyObject * /* unused */, PyObject *args)
+{
+  HANDLE_TH_ERRORS
+  PyObject *py_stream = nullptr;
+  PyObject *py_graph = nullptr;
+  if (!PyArg_ParseTuple(args, "OO", &py_stream, &py_graph)) {
+    return nullptr;
+  }
+  THPUtils_assert(PyLong_Check(py_stream), "invalid stream");
+  uint64_t bits = PyLong_AsUnsignedLongLong(py_stream);
+  if (bits == static_cast<uint64_t>(-1) && PyErr_Occurred()) {
+    throw python_error();
+  }
+  auto stream = at::cuda::CUDAStream::unpack(bits);
+  if (!THCPGraph_Check(py_graph)) {
+    return PyErr_Format(PyExc_TypeError, "expected Graph object");
+  }
+  auto& graph = ((THCPGraph*) py_graph)->cdata;
+  at::cuda::endCUDAStreamCapture(stream, graph);
+  Py_RETURN_NONE;
+  END_HANDLE_TH_ERRORS
+}
+
 static struct PyMethodDef _THCPModule_methods[] = {
   {"_cuda_init",        (PyCFunction)THCPModule_initExtension,    METH_NOARGS,  nullptr},
   {"_cuda_setDevice",   (PyCFunction)THCPModule_setDevice_wrap,   METH_O,       nullptr},
@@ -521,6 +650,13 @@ static struct PyMethodDef _THCPModule_methods[] = {
   {"_nccl_all_gather", (PyCFunction)THCPModule_nccl_all_gather, METH_VARARGS, nullptr},
   {"_nccl_reduce_scatter", (PyCFunction)THCPModule_nccl_reduce_scatter, METH_VARARGS, nullptr},
 #endif
+  {"_cuda_getCaptureStream", (PyCFunction)THCPModule_getCaptureStream_wrap, METH_O, nullptr},
+  {"_cuda_beginStreamPrecapture", (PyCFunction)THCPModule_beginStreamPrecapture_wrap, METH_VARARGS, nullptr},
+  {"_cuda_endStreamPrecapture", (PyCFunction)THCPModule_endStreamPrecapture_wrap, METH_O, nullptr},
+  {"_cuda_beginStreamCapture", (PyCFunction)THCPModule_beginStreamCapture_wrap, METH_VARARGS, nullptr},
+  {"_cuda_endStreamCapture", (PyCFunction)THCPModule_endStreamCapture_wrap, METH_VARARGS, nullptr},
+  {"_cuda_setAutoStreamMode", (PyCFunction)THCPModule_setAutoSteamMode_wrap, METH_O, nullptr},
+  {"_cuda_getAutoStreamMode", (PyCFunction)THCPModule_getAutoSteamMode_wrap, METH_NOARGS, nullptr},
   {nullptr}
 };
 

@@ -1,5 +1,6 @@
 #include <torch/csrc/jit/runtime/graph_executor.h>
 
+#include <ATen/cuda/AutoStream.h>
 #include <ATen/core/ivalue.h>
 #include <c10/util/Exception.h>
 #include <torch/csrc/autograd/grad_mode.h>
@@ -29,6 +30,7 @@
 #include <torch/csrc/jit/passes/shape_analysis.h>
 #include <torch/csrc/jit/passes/specialize_autogradzero.h>
 #include <torch/csrc/jit/passes/tensorexpr_fuser.h>
+#include <torch/csrc/jit/passes/autostream.h>
 #include <torch/csrc/jit/resource_guard.h>
 #include <torch/csrc/jit/runtime/argument_spec.h>
 #include <torch/csrc/jit/runtime/autodiff.h>
@@ -684,10 +686,14 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
           autodiff_subgraph_inlining ? autodiffSubgraphInlineThreshold : 1);
       GRAPH_DEBUG("After InlineAutodiffSubgraphs\n", *opt_graph);
     } else {
-      runNondiffOptimization(opt_graph);
+      if (!kSkipNonDiffOptimizations) {
+        runNondiffOptimization(opt_graph);
+      }
     }
     // Make sure there are no leftovers from any passes.
     EliminateDeadCode(opt_graph);
+    if (at::cuda::autostream::AutoStreamMode::is_enabled())
+      AutoStream(opt_graph);
     GRAPH_DUMP("After compileSpec optimizations:", opt_graph);
     return ExecutionPlan(opt_graph, function_name_);
   }
@@ -747,6 +753,10 @@ TORCH_API bool IsNewExecutorEnabled() {
       std::getenv("TORCH_JIT_DISABLE_NEW_EXECUTOR");
   return getExecutorMode() && FLAGS_torch_jit_enable_new_executor &&
       !disable_new_executor;
+}
+
+void GraphExecutor::skipNonDiffOptimizations() {
+  pImpl->skipNonDiffOptimizations();
 }
 
 void runRequiredPasses(const std::shared_ptr<Graph>& g) {

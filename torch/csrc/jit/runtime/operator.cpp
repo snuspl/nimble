@@ -315,6 +315,8 @@ bool aliasAnalysisHasSpecialCaseFor(Symbol symbol) {
       prim::Enter,
       prim::Exit,
       prim::FallbackGraph,
+      prim::SetStream,
+      prim::RecordEvent,
   };
 
   // Operators that should not be used by alias analysis

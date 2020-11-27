@@ -111,6 +111,23 @@ struct TORCH_API GraphFunction : public Function {
     return executor_;
   }
 
+  void replace_graph_with_optimized_graph(Stack& stack) {
+    ensure_defined();
+    std::lock_guard<std::recursive_mutex> lock(compile_mutex);
+    check_single_output();
+    GraphExecutor one_off_executor = GraphExecutor(optimized_graph());
+    one_off_executor.skipNonDiffOptimizations();
+    ExecutionPlan plan = one_off_executor.getPlanFor(stack);
+    graph_.swap(plan.graph);
+    clear_optimized_graph();
+  }
+
+  // clear previous executor and optimzied graph
+  void clear_optimized_graph() {
+    executor_ = GraphExecutor();
+    optimized_graph_ = c10::nullopt;
+  }
+
  private:
   c10::QualifiedName name_;
   // The original, non-optimized graph
