@@ -17,6 +17,8 @@
 #include <c10/util/Optional.h>
 #include <c10/core/StreamGuard.h>
 
+#include <c10/cuda/CUDAStream.h>
+
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
@@ -791,11 +793,20 @@ variable_list Engine::execute_with_graph_task(
   // See note "Streaming backwards"
   for (const auto& leaf_stream : graph_task->leaf_streams) {
     const auto guard = c10::impl::VirtualGuardImpl{c10::DeviceType::CUDA};
-    const auto default_stream = guard.getDefaultStream(leaf_stream.device());
-    if (leaf_stream != default_stream) {
-      auto event = c10::Event{c10::DeviceType::CUDA};
-      event.record(leaf_stream);
-      default_stream.wait(event);
+    if (c10::cuda::CUDAStream(leaf_stream).is_capture_stream()) {
+      const auto origin_stream = c10::cuda::getCaptureStreamFromPool(true);
+      if (leaf_stream != origin_stream) {
+        auto event = c10::Event{c10::DeviceType::CUDA};
+        event.record(leaf_stream);
+        origin_stream.unwrap().wait(event);
+      }
+    } else {
+      const auto default_stream = guard.getDefaultStream(leaf_stream.device());
+      if (leaf_stream != default_stream) {
+        auto event = c10::Event{c10::DeviceType::CUDA};
+        event.record(leaf_stream);
+        default_stream.wait(event);
+      }
     }
   }
 

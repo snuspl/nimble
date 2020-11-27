@@ -1,5 +1,6 @@
 #include <torch/csrc/jit/graph_executor.h>
 
+#include <ATen/cuda/AutoStream.h>
 #include <ATen/core/ivalue.h>
 #include <c10/util/Exception.h>
 #include <torch/csrc/autograd/grad_mode.h>
@@ -32,6 +33,7 @@
 #include <torch/csrc/jit/passes/requires_grad_analysis.h>
 #include <torch/csrc/jit/passes/shape_analysis.h>
 #include <torch/csrc/jit/passes/specialize_autogradzero.h>
+#include <torch/csrc/jit/passes/autostream.h>
 #include <torch/csrc/jit/profiling_graph_executor_impl.h>
 #include <torch/csrc/jit/profiling_record.h>
 #include <torch/csrc/jit/resource_guard.h>
@@ -602,10 +604,14 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
           opt_graph,
           autodiff_subgraph_inlining ? autodiffSubgraphInlineThreshold : 1);
     } else {
-      runNondiffOptimization(opt_graph);
+      if (!kSkipNonDiffOptimizations) {
+        runNondiffOptimization(opt_graph);
+      }
     }
     // Make sure there are no leftovers from any passes.
     EliminateDeadCode(opt_graph);
+    if (at::cuda::autostream::AutoStreamMode::is_enabled())
+      AutoStream(opt_graph);
     return ExecutionPlan(opt_graph);
   }
 
@@ -642,6 +648,10 @@ std::shared_ptr<Graph> GraphExecutor::graph() const {
 
 GraphExecutorState GraphExecutor::getDebugState() {
   return pImpl->getDebugState();
+}
+
+void GraphExecutor::skipNonDiffOptimizations() {
+  pImpl->skipNonDiffOptimizations();
 }
 
 void runRequiredPasses(const std::shared_ptr<Graph>& g) {

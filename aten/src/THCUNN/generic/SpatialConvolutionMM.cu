@@ -157,16 +157,23 @@ void THNN_(SpatialConvolutionMM_updateOutput)(
   // Resize output
   THCTensor_(resize4d)(state, output, batchSize, nOutputPlane, outputHeight, outputWidth);
 
-  // Resize temporary columns
-  THCTensor_(resize2d)(state, columns, nInputPlane*kW*kH, outputHeight*outputWidth);
+  // we can bypass im2col in this case
+  bool direct_gemm = kW == 1 && kH == 1 && dW == 1 && dH == 1 && padW == 0 && padH == 0;
 
-  // Define a buffer of ones, for bias accumulation
-  // Note: this buffer can be shared with other modules, it only ever gets increased,
-  // and always contains ones.
-  if (ones->dim() != 2 || ones->size(0)*ones->size(1) < outputHeight*outputWidth) {
-    // Resize plane and fill with ones...
-    THCTensor_(resize2d)(state, ones, outputHeight, outputWidth);
-    THCTensor_(fill)(state, ones, ScalarConvert<int, scalar_t>::to(1));
+  if (!direct_gemm) {
+    // Resize temporary columns
+    THCTensor_(resize2d)(state, columns, nInputPlane*kW*kH, outputHeight*outputWidth);
+  }
+
+  if (bias) {
+    // Define a buffer of ones, for bias accumulation
+    // Note: this buffer can be shared with other modules, it only ever gets increased,
+    // and always contains ones.
+    if (ones->dim() != 2 || ones->size(0)*ones->size(1) < outputHeight*outputWidth) {
+      // Resize plane and fill with ones...
+      THCTensor_(resize2d)(state, ones, outputHeight, outputWidth);
+      THCTensor_(fill)(state, ones, ScalarConvert<int, scalar_t>::to(1));
+    }
   }
 
   // Helpers
@@ -186,6 +193,7 @@ void THNN_(SpatialConvolutionMM_updateOutput)(
     int64_t n_ = outputHeight * outputWidth;
     int64_t k_ = 1;
 
+    scalar_t beta = ScalarConvert<int, scalar_t>::to(0);
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
     if (bias) {
       #ifdef THC_REAL_IS_FLOAT
@@ -204,25 +212,26 @@ void THNN_(SpatialConvolutionMM_updateOutput)(
           ScalarConvert<int, scalar_t>::to(0),
           THCTensor_(data)(state, output_n), n_
       );
-    } else {
-      THCTensor_(zero)(state, output_n);
+      beta = ScalarConvert<int, scalar_t>::to(1);
     }
 
-    // Extract columns:
-    at::native::im2col<scalar_t>(
-      THCState_getCurrentStream(state),
-      THCTensor_(data)(state, input_n),
-      nInputPlane, inputHeight, inputWidth,
-      outputHeight, outputWidth,
-      kH, kW, padH, padW, dH, dW,
-      1, 1, 
-      columns->data<scalar_t>()
-    );
+    if (!direct_gemm) {
+      // Extract columns:
+      at::native::im2col<scalar_t>(
+        THCState_getCurrentStream(state),
+        THCTensor_(data)(state, input_n),
+        nInputPlane, inputHeight, inputWidth,
+        outputHeight, outputWidth,
+        kH, kW, padH, padW, dH, dW,
+        1, 1,
+        columns->data<scalar_t>()
+      );
+    }
 
     // M,N,K are dims of matrix A and B
     // (see http://docs.nvidia.com/cuda/cublas/#cublas-lt-t-gt-gemm)
     int64_t m = nOutputPlane;
-    int64_t n = columns->size(1);
+    int64_t n = outputHeight*outputWidth;
     int64_t k = nInputPlane*kH*kW;
 
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
@@ -237,9 +246,9 @@ void THNN_(SpatialConvolutionMM_updateOutput)(
         'n', 'n',
         n, m, k,
         ScalarConvert<int, scalar_t>::to(1),
-        THCTensor_(data)(state, columns), n,
+        THCTensor_(data)(state, direct_gemm ? input_n : columns), n,
         THCTensor_(data)(state, weight), k,
-        ScalarConvert<int, scalar_t>::to(1),
+        beta,
         THCTensor_(data)(state, output_n), n
     );
   }

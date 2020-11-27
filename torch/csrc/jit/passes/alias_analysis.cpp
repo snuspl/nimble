@@ -368,6 +368,8 @@ void AliasDb::analyzeImpl(Node* node) {
       return;
     case prim::Print:
     case prim::isinstance:
+    case prim::SetStream:
+    case prim::RecordEvent:
       // These ops do nothing
       return;
     default:
@@ -1257,6 +1259,8 @@ bool aliasAnalysisHasSpecialCaseFor(Symbol symbol) {
       aten::wait,
       prim::isinstance,
       prim::unchecked_cast,
+      prim::SetStream,
+      prim::RecordEvent,
   };
 
   // Operators that should not be used by alias analysis

@@ -39,8 +39,9 @@ struct LeakyStreamInternals {
 
 // Global stream state and constants
 static DeviceIndex num_gpus = -1;
-static constexpr int kStreamsPerPoolBits = 5;
-static constexpr int kStreamsPerPool = 1 << kStreamsPerPoolBits;
+static constexpr int kStreamsPerPoolBits = 10;
+static constexpr int kStreamsPerPool = 1 << 5;
+static constexpr int kStreamsPerCapturePool = 1 << kStreamsPerPoolBits;
 static constexpr unsigned int kDefaultFlags = cudaStreamNonBlocking;
 
 // Note: stream priority is not supported by HIP
@@ -73,6 +74,11 @@ static std::array<LeakyStreamInternals, kStreamsPerPool>
 static std::array<LeakyStreamInternals, kStreamsPerPool>
     high_priority_streams[C10_COMPILE_TIME_MAX_GPUS];
 
+// Stream for CUDA stream capture
+static std::atomic<uint32_t> capture_counters[C10_COMPILE_TIME_MAX_GPUS];
+static std::array<LeakyStreamInternals, kStreamsPerCapturePool>
+    capture_streams[C10_COMPILE_TIME_MAX_GPUS];
+
 // Note [StreamId assignment]
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~
 // How do we assign stream IDs?
@@ -84,6 +90,7 @@ static std::array<LeakyStreamInternals, kStreamsPerPool>
 //  00 = default stream
 //  01 = low priority stream
 //  10 = high priority stream
+//  11 = capture stream
 //
 // This is not really for efficiency; it's just easier to write the code
 // to extract the index if we do this with bitmasks :)
@@ -104,6 +111,7 @@ enum class StreamIdType : uint8_t {
   DEFAULT = 0x0,
   LOW = 0x1,
   HIGH = 0x2,
+  CAPTURE = 0x3,
 };
 
 std::ostream& operator<<(std::ostream& stream, StreamIdType s) {
@@ -116,6 +124,9 @@ std::ostream& operator<<(std::ostream& stream, StreamIdType s) {
       break;
     case StreamIdType::HIGH:
       stream << "HIGH";
+      break;
+    case StreamIdType::CAPTURE:
+      stream << "CAPTURE";
       break;
     default:
       stream << static_cast<uint8_t>(s);
@@ -178,6 +189,12 @@ static StreamId CUDAStream_getStreamId(const LeakyStreamInternals* ptr) {
         StreamIdType::HIGH, ptr - high_priority_streams[device_index].data());
   }
 
+  if (pointer_within<LeakyStreamInternals>(
+          ptr, capture_streams[device_index])) {
+    return makeStreamId(
+        StreamIdType::CAPTURE, ptr - capture_streams[device_index].data());
+  }
+
   AT_ASSERTM(
       0,
       "Could not compute stream ID for ",
@@ -212,6 +229,7 @@ static void initGlobalStreamState() {
     default_streams[i].device_index = i;
     low_priority_counters[i] = 0;
     high_priority_counters[i] = 0;
+    capture_counters[i] = 0;
   }
 }
 
@@ -239,6 +257,19 @@ static void initDeviceStreamState(DeviceIndex device_index) {
         cudaStreamCreateWithFlags(&lowpri_stream.stream, kDefaultFlags));
     C10_CUDA_CHECK(
         cudaStreamCreateWithFlags(&hipri_stream.stream, kDefaultFlags));
+#endif // __HIP_PLATFORM_HCC__
+  }
+
+  for (auto i = decltype(kStreamsPerCapturePool){0}; i < kStreamsPerCapturePool; ++i) {
+    auto& capture_stream = capture_streams[device_index][i];
+    capture_stream.device_index = device_index;
+
+#ifndef __HIP_PLATFORM_HCC__
+    C10_CUDA_CHECK(cudaStreamCreateWithPriority(
+        &capture_stream.stream, kDefaultFlags, kLowPriority));
+#else
+    C10_CUDA_CHECK(
+        cudaStreamCreateWithFlags(&capture_stream.stream, kDefaultFlags));
 #endif // __HIP_PLATFORM_HCC__
   }
 }
@@ -272,6 +303,13 @@ static uint32_t get_idx(std::atomic<uint32_t>& counter) {
   return raw_idx % kStreamsPerPool;
 }
 
+// Index 0 is dedicated for origin (root) of stream capture.
+// This function always return values from 1 to kStreamsPerCapturePool - 1 (inclusive).
+static uint32_t get_capture_idx(std::atomic<uint32_t>& counter) {
+  auto raw_idx = counter++;
+  return raw_idx % (kStreamsPerCapturePool - 1) + 1;
+}
+
 // See Note [StreamId assignment]
 LeakyStreamInternals* CUDAStream_internals(CUDAStream s) {
   c10::DeviceIndex device_index = s.device_index();
@@ -293,6 +331,8 @@ LeakyStreamInternals* CUDAStream_internals(CUDAStream s) {
       return &low_priority_streams[device_index][si];
     case StreamIdType::HIGH:
       return &high_priority_streams[device_index][si];
+    case StreamIdType::CAPTURE:
+      return &capture_streams[device_index][si];
     default:
       AT_ASSERTM(
           0,
@@ -321,6 +361,10 @@ cudaStream_t CUDAStream::stream() const {
   return ptr->stream;
 }
 
+bool CUDAStream::is_capture_stream() const {
+  return streamIdType(id()) == StreamIdType::CAPTURE;
+}
+
 // Returns a stream from the requested pool
 // Note: when called the first time on a device, this will create the
 // stream pools for that device.
@@ -343,6 +387,22 @@ CUDAStream getStreamFromPool(
 
   const auto idx = get_idx(low_priority_counters[device_index]);
   return CUDAStream_fromInternals(&low_priority_streams[device_index][idx]);
+}
+
+CUDAStream getCaptureStreamFromPool(
+    const bool isOrigin,
+    DeviceIndex device_index) {
+  initCUDAStreamsOnce();
+  if (device_index == -1)
+    device_index = current_device();
+  check_gpu(device_index);
+
+  // Initializes the stream pools (once)
+  std::call_once(
+      device_flags[device_index], initDeviceStreamState, device_index);
+
+  const auto idx = isOrigin ? 0 : get_capture_idx(capture_counters[device_index]);
+  return CUDAStream_fromInternals(&capture_streams[device_index][idx]);
 }
 
 CUDAStream getDefaultCUDAStream(DeviceIndex device_index) {

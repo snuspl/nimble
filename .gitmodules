@@ -118,3 +118,12 @@
     ignore = dirty
     path = android/libs/fbjni
     url = https://github.com/facebookincubator/fbjni.git
+[submodule "experiment/torchvision"]
+	path = experiment/torchvision
+	url = https://github.com/gyeongin/vision
+[submodule "experiment/pretrained-models"]
+	path = experiment/pretrained-models
+	url = https://github.com/gyeongin/pretrained-models.pytorch
+[submodule "experiment/timm"]
+	path = experiment/timm
+	url = https://github.com/gyeongin/pytorch-image-models

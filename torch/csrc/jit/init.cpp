@@ -41,6 +41,8 @@
 #include <torch/csrc/jit/passes/shape_analysis.h>
 #include <torch/csrc/jit/passes/specialize_autogradzero.h>
 #include <torch/csrc/jit/passes/subgraph_rewrite.h>
+#include <torch/csrc/jit/passes/fold_conv_bn.h>
+#include <torch/csrc/jit/passes/prepare_elementwise_op_fusion.h>
 #include <torch/csrc/jit/passes/utils/check_alias_annotation.h>
 #include <torch/csrc/jit/print_handler.h>
 #include <torch/csrc/jit/pybind_utils.h>
@@ -364,7 +366,51 @@ void initJITBindings(PyObject* module) {
                 UnpackQuantizedWeights(graph, paramsDict);
                 return paramsDict;
              },
-             pybind11::return_value_policy::move);
+             pybind11::return_value_policy::move)
+      .def("_jit_pass_fold_convbn_for_traced_module",
+          [](const script::Module& module) {
+            FoldConvBatchNorm2dForTracedModule(module);
+            auto graph = module.get_method("forward").graph();
+            EliminateCommonSubexpression(graph);
+            EliminateDeadCode(graph);
+          })
+      .def("_jit_replace_graph_with_optimized_graph",
+          [](py::args args, py::kwargs kwargs) {
+            // see: [pybind11 varargs]
+            auto tracing_state = tracer::getTracingState();
+            TORCH_INTERNAL_ASSERT(!tracing_state);
+            script::Module& module = py::cast<script::Module&>(args[0]);
+            script::Method forward = module.get_method("forward");
+            auto stack = createStackForSchema(
+                forward.function().getSchema(),
+                tuple_slice(std::move(args), 1),
+                std::move(kwargs),
+                module._ivalue());
+            {
+              AutoNoGIL no_gil_guard;
+              forward.function().replace_graph_with_optimized_graph(stack);
+            }
+          })
+      .def("_jit_pass_prepare_elementwise_op_fusion", &PrepareElementwiseOpFusion)
+      .def("_jit_clear_optimized_graph",
+          [](py::args args, py::kwargs kwargs) {
+            // see: [pybind11 varargs]
+            auto tracing_state = tracer::getTracingState();
+            TORCH_INTERNAL_ASSERT(!tracing_state);
+            script::Module& module = py::cast<script::Module&>(args[0]);
+            script::Method forward = module.get_method("forward");
+            {
+              AutoNoGIL no_gil_guard;
+              forward.function().clear_optimized_graph();
+            }
+          })
+      .def("_jit_pass_fold_conv_cat_bn_for_traced_module",
+          [](const script::Module& module) {
+            FoldConvCatBatchNorm2dForTracedModule(module);
+            auto graph = module.get_method("forward").graph();
+            EliminateCommonSubexpression(graph);
+            EliminateDeadCode(graph);
+          });
 
   // NOLINTNEXTLINE(bugprone-unused-raii)
   py::class_<CompleteArgumentSpec>(m, "CompleteArgumentSpec")

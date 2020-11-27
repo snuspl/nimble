@@ -17,7 +17,8 @@ void destroyCuDNNHandle(cudnnHandle_t handle) {
 //   - @soumith
 #ifdef NO_CUDNN_DESTROY_HANDLE
 #else
-    cudnnDestroy(handle);
+    TORCH_WARN("We temporarily disable destroying cudnnHandle_t at process exit due to unidentified segfault issue in cudnn v8.");
+    // cudnnDestroy(handle);
 #endif
 }
 

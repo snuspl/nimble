@@ -62,6 +62,10 @@ struct GraphExecutorImplBase {
   // entry point where execution begins
   void run(Stack& stack);
 
+  void skipNonDiffOptimizations() {
+    kSkipNonDiffOptimizations = true;
+  };
+
   virtual ExecutionPlan getPlanFor(Stack& stack) = 0;
   virtual GraphExecutorState getDebugState() = 0;
   virtual ~GraphExecutorImplBase() = default;
@@ -82,6 +86,8 @@ struct GraphExecutorImplBase {
   // GraphExecutors can be accessed from multiple threads, so this thread needs
   // to be held every time we access the fallback or plan_cache.
   std::mutex compile_mutex;
+
+  bool kSkipNonDiffOptimizations = false;
 };
 
 } // namespace jit

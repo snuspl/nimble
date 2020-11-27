@@ -30,4 +30,6 @@ THC_API cudaError_t THCCachingHostAllocator_recordEvent(void *ptr, at::cuda::CUD
 // Releases cached pinned memory allocations via cudaHostFree
 THC_API void THCCachingHostAllocator_emptyCache(void);
 
+THC_API std::unique_ptr<std::vector<at::DataPtr>> collectCapturedHostPointers(void);
+
 #endif

@@ -171,6 +171,7 @@ if (USE_CUDA)
       ${TORCH_SRC_DIR}/csrc/cuda/utils.cpp
       ${TORCH_SRC_DIR}/csrc/cuda/python_comm.cpp
       ${TORCH_SRC_DIR}/csrc/cuda/serialization.cpp
+      ${TORCH_SRC_DIR}/csrc/cuda/Graph.cpp
       ${GENERATED_THNN_CXX_CUDA}
       )
     list(APPEND TORCH_PYTHON_COMPILE_DEFINITIONS USE_CUDA)
@@ -212,6 +213,7 @@ if (USE_ROCM)
       ${TORCH_SRC_DIR}/csrc/cuda/utils.cpp
       ${TORCH_SRC_DIR}/csrc/cuda/python_comm.cpp
       ${TORCH_SRC_DIR}/csrc/cuda/serialization.cpp
+      ${TORCH_SRC_DIR}/csrc/cuda/Graph.cpp
       ${GENERATED_THNN_CXX_CUDA}
       )
 

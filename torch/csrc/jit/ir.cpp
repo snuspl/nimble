@@ -957,6 +957,8 @@ bool Node::hasSideEffects() const {
     case prim::profile:
     case prim::BailOut:
     case prim::Guard:
+    case prim::SetStream:
+    case prim::RecordEvent:
       return true;
   }
 

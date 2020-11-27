@@ -823,6 +823,215 @@ static void CudaCachingDeleter(void* ptr) {
   caching_allocator.free(ptr);
 }
 
+namespace {
+enum struct FreeType : uint64_t {
+  PRECAPTURE = 0,
+  CAPTURE = 1,
+  GRAPH_DELETION = 2,
+  NUM_TYPES = 3
+};
+
+struct AllocationMeta {
+  AllocationMeta(size_t size): free_status(0), size(size) {}
+  
+  // NOTE: addresses managed by graph should receive 3 free requests in total,
+  // since they are allocated 3 times (precapture, capture and exportCapturedPointers)
+  // They act like shared_ptr that are refrenced in 3 different spots.
+  std::bitset<static_cast<size_t>(FreeType::NUM_TYPES)> free_status;
+  size_t size;
+};
+
+static bool GraphBlockComparator(const Block* a, const Block* b)
+{
+  if (a->device != b->device) {
+    return a->device < b->device;
+  }
+  if (a->size != b->size) {
+    return a->size < b->size;
+  }
+  return (uintptr_t)a->ptr < (uintptr_t)b->ptr;
+}
+} // namespace
+
+static void CudaGraphFreeFn(void *ptr);
+
+class THCGraphAllocator {
+ private:
+  // lock around all operations
+  mutable std::recursive_mutex mutex;
+
+  // blocks reserved by current pre-capture
+  BlockPool precaptured_blocks;
+  BlockPool precaptured_raw_blocks;
+
+  // These pointers are going to exported and referenced by a Graph module that manages execution of captured CUDA Graph.
+  // Once the Graph module destroyed, the pointers referenced by the Graph module will be freed via CudaGraphFreeFn.
+  std::vector<at::DataPtr> captured_pointers;
+
+  std::unordered_map<void*, AllocationMeta> allocated;
+  Stat allocated_bytes;
+  Stat allocated_nums;
+
+ public:
+  THCGraphAllocator()
+      : precaptured_blocks(GraphBlockComparator),
+        precaptured_raw_blocks(GraphBlockComparator) {}
+  
+  void malloc(void** devPtr, size_t size, const CUDAStream &stream, bool raw_allocate=false) {
+    int device = stream.device_index();
+    if (stream.is_capturing()) {
+      // if the stream is in capturing stage
+      std::lock_guard<std::recursive_mutex> lock(mutex);
+
+      // NOTE: now search_key concerns stream
+      Block search_key(device, stream, size);
+      
+      if (raw_allocate) {
+        auto find_preallocated_block = [&]()->Block*{
+          auto it = precaptured_raw_blocks.lower_bound(&search_key);
+          if (it != precaptured_raw_blocks.end()
+              && (*it)->device == device
+              && (*it)->size == size) {
+            Block* block = *it;
+            precaptured_raw_blocks.erase(it);
+            return block;
+          }
+          return nullptr;
+        };
+
+        Block* block = find_preallocated_block();
+        AT_ASSERT(block);
+        *devPtr = block->ptr;
+        delete block;
+      } else {
+        auto find_preallocated_block = [&]()->Block*{
+          auto it = precaptured_blocks.lower_bound(&search_key);
+          if (it != precaptured_blocks.end()
+              && (*it)->device == device
+              && (*it)->size == size) {
+            Block* block = *it;
+            precaptured_blocks.erase(it);
+            return block;
+          }
+          return nullptr;
+        };
+
+        Block* block = find_preallocated_block();
+        AT_ASSERT(block);
+        *devPtr = block->ptr;
+        delete block;
+      }
+      captured_pointers.emplace_back(*devPtr, *devPtr, &CudaGraphFreeFn, Device(DeviceType::CUDA, device));
+
+    } else {
+      // otherwise, the stream is in pre-capturing stage
+      void* ptr = nullptr;
+      C10_CUDA_CHECK(cudaMalloc(&ptr, size));
+      AT_ASSERT(ptr);
+      *devPtr = ptr;
+
+      std::lock_guard<std::recursive_mutex> lock(mutex);
+      
+      if (raw_allocate) {
+        Block* block = new Block(device, stream, size, &precaptured_raw_blocks, ptr);
+        precaptured_raw_blocks.insert(block);
+      } else {
+        Block* block = new Block(device, stream, size, &precaptured_blocks, ptr);
+        precaptured_blocks.insert(block);
+      }
+
+      allocated.emplace(*devPtr, size);
+      update_stat(allocated_bytes, size);
+      update_stat(allocated_nums, 1);
+    }
+  }
+  
+  void free_without_lock(void* ptr, FreeType free_type) {
+    auto& free_status = allocated.at(ptr).free_status;
+    AT_ASSERT(free_status.test(static_cast<size_t>(free_type)) == false);
+    free_status.set(static_cast<size_t>(free_type), true);
+    
+    if (free_status.all()) {
+      C10_CUDA_CHECK(cudaFree(ptr));
+      update_stat(allocated_bytes, -allocated.at(ptr).size);
+      update_stat(allocated_nums, -1);
+      allocated.erase(ptr);
+    }
+  }
+
+  void free(void* ptr, FreeType free_type) {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    free_without_lock(ptr, free_type);
+  }
+
+  bool raw_free(void* ptr) {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    if (allocated.find(ptr) == allocated.end()) {
+      return false;
+    }
+
+    auto& free_status = allocated.at(ptr).free_status;
+    if (free_status.test(static_cast<size_t>(FreeType::PRECAPTURE))) {
+      free_without_lock(ptr, FreeType::CAPTURE);
+    } else {
+      free_without_lock(ptr, FreeType::PRECAPTURE);
+    }
+    return true;
+  }
+
+  std::unique_ptr<std::vector<DataPtr>> exportCapturedPointers() {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    AT_ASSERT(precaptured_blocks.empty());
+    AT_ASSERT(precaptured_raw_blocks.empty());
+    // captured_pointers automatically becomes empty, but let's make it explicit
+    std::unique_ptr<std::vector<at::DataPtr>> ret(new std::vector<at::DataPtr>(std::move(captured_pointers)));
+    captured_pointers.clear();
+    return ret;
+  }
+
+  Stat get_allocated_bytes() {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    return allocated_bytes;
+  }
+  
+  Stat get_allocated_nums() {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    return allocated_nums;
+  }
+};
+
+THCGraphAllocator graph_allocator;
+
+std::unique_ptr<std::vector<DataPtr>> collectCapturedDevicePointers() {
+  return graph_allocator.exportCapturedPointers();
+}
+
+C10_CUDA_API Stat getGraphAllocatedBytes() {
+  return graph_allocator.get_allocated_bytes();
+}
+
+C10_CUDA_API Stat getGraphAllocatedNums() {
+  return graph_allocator.get_allocated_nums();
+}
+
+static void CudaGraphFreeFn(void* ptr) {
+  graph_allocator.free(ptr, FreeType::GRAPH_DELETION);
+}
+
+static void CudaPrecaptureFreeFn(void* ptr) {
+  graph_allocator.free(ptr, FreeType::PRECAPTURE);
+}
+
+static void CudaCaptureFreeFn(void* ptr) {
+  graph_allocator.free(ptr, FreeType::CAPTURE);
+}
+
+static void RawDeleter(void* ptr) {
+  if (!graph_allocator.raw_free(ptr)) {
+    caching_allocator.free(ptr);
+  }
+}
+
 // NB: I decided not to fold this into THCCachingAllocator, because the latter
 // has a lot more methods and it wasn't altogether clear that they should
 // actually be publicly exposed
@@ -831,13 +1040,42 @@ struct CudaCachingAllocator : public Allocator {
     int device;
     C10_CUDA_CHECK(cudaGetDevice(&device));
     void* r = nullptr;
-    if (size != 0) {
-      caching_allocator.malloc(&r, size, cuda::getCurrentCUDAStream(device));
+    auto stream = cuda::getCurrentCUDAStream(device);
+
+    if (stream.is_capture_stream()) {
+      if (size != 0) {
+        graph_allocator.malloc(&r, size, stream);
+      }
+      if (stream.is_capturing()) {
+        return {r, r, &CudaCaptureFreeFn, Device(DeviceType::CUDA, device)};
+      } else {
+        return {r, r, &CudaPrecaptureFreeFn, Device(DeviceType::CUDA, device)};
+      }
+    } else {
+      if (size != 0) {
+        caching_allocator.malloc(&r, size, stream);
+      }
+      return {r, r, &CudaCachingDeleter, Device(DeviceType::CUDA, device)};
     }
-    return {r, r, &CudaCachingDeleter, Device(DeviceType::CUDA, device)};
+  }
+  void* raw_allocate(size_t n) override {
+    int device;
+    C10_CUDA_CHECK(cudaGetDevice(&device));
+
+    void* r = nullptr;
+    auto stream = cuda::getCurrentCUDAStream(device);
+
+    if (stream.is_capture_stream()) {
+      if (n != 0) {
+        graph_allocator.malloc(&r, n, stream, true);
+      }
+    } else {
+      caching_allocator.malloc(&r, n, stream);
+    }
+    return r;
   }
   DeleterFnPtr raw_deleter() const override {
-    return &CudaCachingDeleter;
+    return &RawDeleter;
   }
 };
 

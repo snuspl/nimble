@@ -71,6 +71,8 @@ namespace c10 {
   _(aten, Int)                       \
   _(aten, Float)                     \
   _(aten, str)                       \
+  _(prim, SetStream)                \
+  _(prim, RecordEvent)              \
   _(prim, device)                    \
   _(prim, dtype)                     \
   _(prim, shape)                     \
