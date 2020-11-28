@@ -102,8 +102,7 @@ Please refer to [evaluation instructions](NIMBLE_EVAL.md) to reproduce the evalu
 
 ## Publication
 
-Woosuk Kwon*, Gyeong-In Yu*, Eunji Jeong, and Byung-Gon Chun (* equal contribution), [Nimble: Lightweight and Parallel GPU Task Scheduling for Deep Learning](https://papers.nips.cc/paper/2020/file/5f0ad4db43d8723d18169b2e4817a160-Paper.pdf), 34th Conference on Neural Information Processing Systems (NeurIPS), December 2020.
-Spotlight (280/9467=3%)
+Woosuk Kwon*, Gyeong-In Yu*, Eunji Jeong, and Byung-Gon Chun (* equal contribution), [Nimble: Lightweight and Parallel GPU Task Scheduling for Deep Learning](https://papers.nips.cc/paper/2020/file/5f0ad4db43d8723d18169b2e4817a160-Paper.pdf), 34th Conference on Neural Information Processing Systems (NeurIPS), Spotlight, December 2020.
 
 ## Citation
 
