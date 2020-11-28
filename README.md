@@ -120,9 +120,8 @@ Spotlight (280/9467=3%)
 Create an issue for questions and bug reports.
 
 ## Contribution
-We aim to create an open-source project that is contributed by the open-source community.
-We maintain a mailing list (nimble-discuss@googlegroups.com) for general discussions about development.
-If you are interested in contributing to nimble next generation, please contact us at nimble@spl.snu.ac.kr.
+We welcome your contributions to Nimble! We aim to create an open-source project that is contributed by the open-source community. 
+For general discussions about development, please subscribe to nimble-discuss@googlegroups.com. 
 
 ## License
 [BSD 3-clause license](LICENSE)
