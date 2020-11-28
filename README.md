@@ -103,7 +103,7 @@ Please refer to [evaluation instructions](NIMBLE_EVAL.md) to reproduce the evalu
 ## Publication
 
 Woosuk Kwon*, Gyeong-In Yu*, Eunji Jeong, and Byung-Gon Chun (* equal contribution), [Nimble: Lightweight and Parallel GPU Task Scheduling for Deep Learning](https://papers.nips.cc/paper/2020/file/5f0ad4db43d8723d18169b2e4817a160-Paper.pdf), 34th Conference on Neural Information Processing Systems (NeurIPS), December 2020.
-Spotlight (385/9467=4.1%)
+Spotlight (280/9467=3%)
 
 ## Citation
 
@@ -120,8 +120,9 @@ Spotlight (385/9467=4.1%)
 Create an issue for questions and bug reports.
 
 ## Contribution
-Nimble adopts the Apache project model. We aim to create an open-source project that is contributed by the open-source community.
+We aim to create an open-source project that is contributed by the open-source community.
 We maintain a mailing list (nimble-discuss@googlegroups.com) for general discussions about development.
+If you are interested in contributing to nimble next generation, please contact us at nimble@spl.snu.ac.kr.
 
 ## License
 [BSD 3-clause license](LICENSE)
