@@ -314,6 +314,7 @@ void FoldConvCatBatchNorm2dForTracedModule(const script::Module& module) {
   std::unordered_map<Value*, Value*> matched_bn_value_to_rewriting_value;
   std::vector<Value*> matched_bn_values;
   std::unordered_set<Node*> matched_bn_nodes;
+  std::unordered_set<Node*> single_tensor_cat_nodes;
 
   for (auto it = graph->nodes().rbegin(); it != graph->nodes().rend(); it++) {
     Node* cat = *it;
@@ -410,7 +411,15 @@ void FoldConvCatBatchNorm2dForTracedModule(const script::Module& module) {
         list_construct->replaceInput(i, add_bias->output());
       }
     }
-    matched_bn_value_to_rewriting_value[batchnorm->output()] = cat->output();
+
+    if (list_construct->inputs().size() == 1) {
+      Node* conv_bias = list_construct->input()->node();
+      matched_bn_value_to_rewriting_value[batchnorm->output()] = conv_bias->output();
+      single_tensor_cat_nodes.insert(cat);
+      single_tensor_cat_nodes.insert(list_construct);
+    } else {
+      matched_bn_value_to_rewriting_value[batchnorm->output()] = cat->output();
+    }
   }
 
   for (auto v : matched_bn_values) {
@@ -420,7 +429,13 @@ void FoldConvCatBatchNorm2dForTracedModule(const script::Module& module) {
   for (auto n : matched_bn_nodes) {
     n->removeAllInputs();
   }
+  for (auto n : single_tensor_cat_nodes) {
+    n->removeAllInputs();
+  }
   for (auto n : matched_bn_nodes) {
+    n->destroy();
+  }
+  for (auto n : single_tensor_cat_nodes) {
     n->destroy();
   }
 }
