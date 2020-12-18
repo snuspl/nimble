@@ -719,7 +719,37 @@ void initJITBindings(PyObject* module) {
                 c10::nullopt));
           }
         }
-      });
+      })
+      .def("_jit_replace_graph_with_optimized_graph",
+          [](py::args args, py::kwargs kwargs) {
+            // see: [pybind11 varargs]
+            auto tracing_state = tracer::getTracingState();
+            TORCH_INTERNAL_ASSERT(!tracing_state);
+            script::Module& module = py::cast<script::Module&>(args[0]);
+            script::Method forward = module.get_method("forward");
+            auto stack = createStackForSchema(
+                forward.function().getSchema(),
+                tuple_slice(std::move(args), 1),
+                std::move(kwargs),
+                module._ivalue());
+            {
+              AutoNoGIL no_gil_guard;
+              forward.function().replace_graph_with_optimized_graph(stack);
+            }
+          })
+      .def("_jit_pass_prepare_elementwise_op_fusion", &PrepareElementwiseOpFusion)
+      .def("_jit_clear_optimized_graph",
+          [](py::args args, py::kwargs kwargs) {
+            // see: [pybind11 varargs]
+            auto tracing_state = tracer::getTracingState();
+            TORCH_INTERNAL_ASSERT(!tracing_state);
+            script::Module& module = py::cast<script::Module&>(args[0]);
+            script::Method forward = module.get_method("forward");
+            {
+              AutoNoGIL no_gil_guard;
+              forward.function().clear_optimized_graph();
+            }
+          });
 
   // NOLINTNEXTLINE(bugprone-unused-raii)
   py::class_<CompleteArgumentSpec>(m, "CompleteArgumentSpec")
