@@ -3,6 +3,8 @@
 #include <torch/csrc/jit/runtime/register_ops_utils.h>
 #include <torch/library.h>
 
+#include <ATen/cuda/AutoStream.h>
+
 #include <algorithm>
 #include <bitset>
 #include <cctype>

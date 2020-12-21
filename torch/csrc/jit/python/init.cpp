@@ -2,6 +2,7 @@
 #include <torch/csrc/utils/python_arg_parser.h>
 
 #include <torch/csrc/jit/api/module.h>
+#include <torch/csrc/jit/api/function_impl.h>
 #include <torch/csrc/jit/backends/backend_init.h>
 #include <torch/csrc/jit/codegen/fuser/interface.h>
 #include <torch/csrc/jit/codegen/fuser/kernel_cache.h>
@@ -45,6 +46,7 @@
 #include <torch/csrc/jit/passes/onnx/shape_type_inference.h>
 #include <torch/csrc/jit/passes/onnx/unpack_quantized_weights.h>
 #include <torch/csrc/jit/passes/peephole.h>
+#include <torch/csrc/jit/passes/prepare_elementwise_op_fusion.h>
 #include <torch/csrc/jit/passes/quantization/dedup_module_uses.h>
 #include <torch/csrc/jit/passes/quantization/finalize.h>
 #include <torch/csrc/jit/passes/quantization/fusion_passes.h>
@@ -734,7 +736,9 @@ void initJITBindings(PyObject* module) {
                 module._ivalue());
             {
               AutoNoGIL no_gil_guard;
-              forward.function().replace_graph_with_optimized_graph(stack);
+              TORCH_INTERNAL_ASSERT(forward.function().isGraphFunction());
+              torch::jit::GraphFunction* graph_fn = dynamic_cast<torch::jit::GraphFunction*>(&forward.function());
+              graph_fn->replace_graph_with_optimized_graph(stack);
             }
           })
       .def("_jit_pass_prepare_elementwise_op_fusion", &PrepareElementwiseOpFusion)
@@ -747,7 +751,9 @@ void initJITBindings(PyObject* module) {
             script::Method forward = module.get_method("forward");
             {
               AutoNoGIL no_gil_guard;
-              forward.function().clear_optimized_graph();
+              TORCH_INTERNAL_ASSERT(forward.function().isGraphFunction());
+              torch::jit::GraphFunction* graph_fn = dynamic_cast<torch::jit::GraphFunction*>(&forward.function());
+              graph_fn->clear_optimized_graph();
             }
           });
 

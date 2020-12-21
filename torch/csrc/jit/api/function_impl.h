@@ -115,9 +115,9 @@ struct TORCH_API GraphFunction : public Function {
     ensure_defined();
     std::lock_guard<std::recursive_mutex> lock(compile_mutex);
     check_single_output();
-    GraphExecutor one_off_executor = GraphExecutor(optimized_graph());
+    GraphExecutor one_off_executor = GraphExecutor(optimized_graph(), name_.name());
     one_off_executor.skipNonDiffOptimizations();
-    ExecutionPlan plan = one_off_executor.getPlanFor(stack);
+    ExecutionPlan plan = one_off_executor.getPlanFor(stack, GraphExecutor::getDefaultNumBailOuts());
     graph_.swap(plan.graph);
     clear_optimized_graph();
   }

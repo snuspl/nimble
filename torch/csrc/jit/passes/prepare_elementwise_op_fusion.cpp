@@ -109,7 +109,7 @@ SubgraphRewriter getRewriter(const std::string& pattern_template,
 } // namespace
 
 
-void PrepareElementwiseOpFusion(const script::Module& module) {
+void PrepareElementwiseOpFusion(const Module& module) {
   for (const std::pair<std::string, std::string>& p : unary_op_to_rewriting_op) {
     SubgraphRewriter rewriter = getRewriter(pattern_template_for_unary_op, p);
     rewriter.runOnModule(module);

@@ -29,13 +29,13 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <torch/csrc/jit/ir.h>
-#include <torch/csrc/jit/script/module.h>
+#include <torch/csrc/jit/ir/ir.h>
+#include <torch/csrc/jit/api/module.h>
 
 namespace torch {
 namespace jit {
 
-TORCH_API void PrepareElementwiseOpFusion(const script::Module& module);
+TORCH_API void PrepareElementwiseOpFusion(const Module& module);
 
 } // namespace jit
 } // namespace torch
