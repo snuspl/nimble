@@ -28,9 +28,9 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <torch/csrc/jit/passes/autostream.h>
+#include <torch/csrc/jit/passes/utils/DAGDecomposition.h>
 
 #include <ATen/cuda/AutoStream.h>
-#include <ATen/cuda/DAGDecomposition.h>
 
 #include <tuple>
 #include <vector>
