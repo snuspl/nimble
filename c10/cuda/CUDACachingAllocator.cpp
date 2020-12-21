@@ -1143,9 +1143,9 @@ struct CudaCachingAllocator : public Allocator {
         return {r, r, &uncached_delete, Device(DeviceType::CUDA, device)};
       }
       if (size != 0) {
-        caching_allocator.malloc(&r, size, stream);
+        caching_allocator.malloc(&r, device, size, stream);
       }
-      return {r, r, &CudaCachingDeleter, Device(DeviceType::CUDA, device)};
+      return {r, r, &raw_delete, Device(DeviceType::CUDA, device)};
     }
   }
   void* raw_allocate(size_t n) override {
@@ -1160,7 +1160,7 @@ struct CudaCachingAllocator : public Allocator {
         graph_allocator.malloc(&r, n, stream, true);
       }
     } else {
-      caching_allocator.malloc(&r, n, stream);
+      caching_allocator.malloc(&r, device, n, stream);
     }
     return r;
   }
