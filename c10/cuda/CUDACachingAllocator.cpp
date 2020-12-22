@@ -963,8 +963,7 @@ class THCGraphAllocator {
       : precaptured_blocks(GraphBlockComparator),
         precaptured_raw_blocks(GraphBlockComparator) {}
   
-  void malloc(void** devPtr, size_t size, const CUDAStream &stream, bool raw_allocate=false) {
-    int device = stream.device_index();
+  void malloc(void** devPtr, int device, size_t size, const CUDAStream &stream, bool raw_allocate=false) {
     if (stream.is_capturing()) {
       // if the stream is in capturing stage
       std::lock_guard<std::recursive_mutex> lock(mutex);
@@ -1130,7 +1129,7 @@ struct CudaCachingAllocator : public Allocator {
 
     if (stream.is_capture_stream()) {
       if (size != 0) {
-        graph_allocator.malloc(&r, size, stream);
+        graph_allocator.malloc(&r, device, size, stream);
       }
       if (stream.is_capturing()) {
         return {r, r, &CudaCaptureFreeFn, Device(DeviceType::CUDA, device)};
@@ -1157,7 +1156,7 @@ struct CudaCachingAllocator : public Allocator {
 
     if (stream.is_capture_stream()) {
       if (n != 0) {
-        graph_allocator.malloc(&r, n, stream, true);
+        graph_allocator.malloc(&r, device, n, stream, true);
       }
     } else {
       caching_allocator.malloc(&r, device, n, stream);
