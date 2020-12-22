@@ -27,7 +27,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <ATen/cuda/DAGDecomposition.h>
+#include <torch/csrc/jit/passes/utils/DAGDecomposition.h>
 
 #include <utility>
 #include <algorithm>

@@ -202,6 +202,7 @@ core_sources_full = [
     "torch/csrc/jit/passes/tensorexpr_fuser.cpp",
     "torch/csrc/jit/passes/utils/memory_dag.cpp",
     "torch/csrc/jit/passes/utils/subgraph_utils.cpp",
+    "torch/csrc/jit/passes/utils/DAGDecomposition.cpp",
     "torch/csrc/jit/passes/xnnpack_rewrite.cpp",
     "torch/csrc/jit/passes/vulkan_rewrite.cpp",
     "torch/csrc/jit/passes/quantization/helper.cpp",
@@ -454,6 +455,7 @@ libtorch_python_cuda_core_sources = [
     "torch/csrc/cuda/shared/cudart.cpp",
     "torch/csrc/cuda/shared/nvtx.cpp",
     "torch/csrc/cuda/utils.cpp",
+    "torch/csrc/cuda/Graph.cpp"
 ]
 
 libtorch_python_cuda_sources = libtorch_python_cuda_core_sources + [

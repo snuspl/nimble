@@ -40,12 +40,12 @@ struct TORCH_CUDA_API AutoStreamMode {
   static void set_enabled(bool enabled);
 };
 
-void generate_streams(int stream_num);
-void record_init_event();
-void wait_all_streams();
-void set_stream(int stream_idx, c10::List<int64_t> parent_ids);
-void record_event(int node_id, int stream_idx);
-void clear_capture_streams();
+TORCH_CUDA_API void generate_streams(int stream_num);
+TORCH_CUDA_API void record_init_event();
+TORCH_CUDA_API void wait_all_streams();
+TORCH_CUDA_API void set_stream(int stream_idx, c10::List<int64_t> parent_ids);
+TORCH_CUDA_API void record_event(int node_id, int stream_idx);
+TORCH_CUDA_API void clear_capture_streams();
 
 } // namespace autostream
 } // namespace cuda
