@@ -300,11 +300,11 @@ def rewrite_graph(model, dummy_inputs, training=False, use_multi_stream=False):
 
 def tag_conv(module, x):
     def _dfs_traverse(module):
-        for name, submodule in module.named_children():
+        for _, submodule in module.named_children():
             if isinstance(submodule, torch.nn.Conv2d):
                 def tag_forward(self, input):
                     self.input = input
-                    return self.conv2d_forward(input, self.weight)
+                    return self._conv_forward(input, self.weight)
                 submodule.forward = types.MethodType(tag_forward, submodule)
             else:
                 _dfs_traverse(submodule)
