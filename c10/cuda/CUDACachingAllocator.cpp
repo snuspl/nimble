@@ -970,44 +970,25 @@ class THCGraphAllocator {
 
       // NOTE: now search_key concerns stream
       Block search_key(device, stream, size);
-      
-      if (raw_allocate) {
-        auto find_preallocated_block = [&]()->Block*{
-          auto it = precaptured_raw_blocks.lower_bound(&search_key);
-          if (it != precaptured_raw_blocks.end()
-              && (*it)->device == device
-              && (*it)->size == size) {
-            Block* block = *it;
-            precaptured_raw_blocks.erase(it);
-            return block;
-          }
-          return nullptr;
-        };
+      auto find_preallocated_block = [&](BlockPool& block_pool)->Block*{
+        auto it = block_pool.lower_bound(&search_key);
+        if (it != block_pool.end()
+            && (*it)->device == device
+            && (*it)->size == size) {
+          Block* block = *it;
+          block_pool.erase(it);
+          return block;
+        }
+        return nullptr;
+      };
 
-        Block* block = find_preallocated_block();
-        AT_ASSERT(block);
-        *devPtr = block->ptr;
-        delete block;
-      } else {
-        auto find_preallocated_block = [&]()->Block*{
-          auto it = precaptured_blocks.lower_bound(&search_key);
-          if (it != precaptured_blocks.end()
-              && (*it)->device == device
-              && (*it)->size == size) {
-            Block* block = *it;
-            precaptured_blocks.erase(it);
-            return block;
-          }
-          return nullptr;
-        };
+      BlockPool& block_pool = raw_allocate? precaptured_raw_blocks : precaptured_blocks;
+      Block* block = find_preallocated_block(block_pool);
+      AT_ASSERT(block);
+      *devPtr = block->ptr;
+      delete block;
 
-        Block* block = find_preallocated_block();
-        AT_ASSERT(block);
-        *devPtr = block->ptr;
-        delete block;
-      }
       captured_pointers.emplace_back(*devPtr, *devPtr, &CudaGraphFreeFn, Device(DeviceType::CUDA, device));
-
     } else {
       // otherwise, the stream is in pre-capturing stage
       void* ptr = nullptr;
