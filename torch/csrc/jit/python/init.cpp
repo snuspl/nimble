@@ -21,6 +21,7 @@
 #include <torch/csrc/jit/passes/decompose_ops.h>
 #include <torch/csrc/jit/passes/erase_number_types.h>
 #include <torch/csrc/jit/passes/fold_conv_bn.h>
+#include <torch/csrc/jit/passes/fold_conv_cat_bn.h>
 #include <torch/csrc/jit/passes/freeze_module.h>
 #include <torch/csrc/jit/passes/fuse_linear.h>
 #include <torch/csrc/jit/passes/fuse_relu.h>
@@ -722,39 +723,27 @@ void initJITBindings(PyObject* module) {
           }
         }
       })
-      .def("_jit_replace_graph_with_optimized_graph",
-          [](py::args args, py::kwargs kwargs) {
-            // see: [pybind11 varargs]
-            auto tracing_state = tracer::getTracingState();
-            TORCH_INTERNAL_ASSERT(!tracing_state);
-            script::Module& module = py::cast<script::Module&>(args[0]);
-            script::Method forward = module.get_method("forward");
-            auto stack = createStackForSchema(
-                forward.function().getSchema(),
-                tuple_slice(std::move(args), 1),
-                std::move(kwargs),
-                module._ivalue());
-            {
-              AutoNoGIL no_gil_guard;
-              TORCH_INTERNAL_ASSERT(forward.function().isGraphFunction());
-              torch::jit::GraphFunction* graph_fn = dynamic_cast<torch::jit::GraphFunction*>(&forward.function());
-              graph_fn->replace_graph_with_optimized_graph(stack);
-            }
-          })
+      .def("_jit_required_passes",
+          [](std::shared_ptr<Graph>& graph) {
+            auto opt_graph = graph->copy();
+            Inline(*opt_graph);
+            LowerSimpleTuples(opt_graph);
+            ConstantPooling(opt_graph);
+            runRequiredPasses(opt_graph);
+            ConstantPropagation(opt_graph);
+            EliminateDeadCode(opt_graph);
+            EliminateCommonSubexpression(opt_graph);
+      })
+      .def("_jit_pass_fold_conv_cat_bn", &FoldConvCatBatchNorm2dForTracedModule)
       .def("_jit_pass_prepare_elementwise_op_fusion", &PrepareElementwiseOpFusion)
-      .def("_jit_clear_optimized_graph",
+      .def("_jit_clear_execution_info",
           [](py::args args, py::kwargs kwargs) {
             // see: [pybind11 varargs]
             auto tracing_state = tracer::getTracingState();
             TORCH_INTERNAL_ASSERT(!tracing_state);
             script::Module& module = py::cast<script::Module&>(args[0]);
             script::Method forward = module.get_method("forward");
-            {
-              AutoNoGIL no_gil_guard;
-              TORCH_INTERNAL_ASSERT(forward.function().isGraphFunction());
-              torch::jit::GraphFunction* graph_fn = dynamic_cast<torch::jit::GraphFunction*>(&forward.function());
-              graph_fn->clear_optimized_graph();
-            }
+            forward.function().clear_execution_info();
           });
 
   // NOLINTNEXTLINE(bugprone-unused-raii)
