@@ -33,6 +33,10 @@ import numpy as np
 import pandas as pd
 import torch
 
+import pycuda.autoinit
+import pycuda.driver as cuda_driver
+import onnx
+from onnx_to_trt import allocate_buffers, get_engine
 
 NUM_CLASSES_IMAGENET = 1000
 NUM_WARM_UPS = 50
@@ -229,10 +233,6 @@ class C2InferenceWrapper(BlockingInferenceWrapperBase):
 class ONNXTRTInferenceWrapper(InferenceWrapperBase):
     def __init__(self, model, dummy_input):
         super(ONNXTRTInferenceWrapper, self).__init__()
-        import pycuda.autoinit
-        import pycuda.driver as cuda_driver
-        import onnx
-        from onnx_to_trt import allocate_buffers, get_engine
         self.cuda_driver = cuda_driver
 
         self.onnx_model_file = tempfile.NamedTemporaryFile()
@@ -249,8 +249,8 @@ class ONNXTRTInferenceWrapper(InferenceWrapperBase):
         self.inputs, self.outputs, self.bindings, self.stream = allocate_buffers(self.engine)
 
         self.output_shape = self.engine.get_binding_shape(1)
-        self.start_event = cuda_driver.Event()
-        self.end_event = cuda_driver.Event()
+        self.start_event = self.cuda_driver.Event()
+        self.end_event = self.cuda_driver.Event()
 
         self.inputs[0].host = dummy_input.cpu().numpy()
         self.cuda_driver.memcpy_htod_async(self.inputs[0].device, self.inputs[0].host, self.stream)
