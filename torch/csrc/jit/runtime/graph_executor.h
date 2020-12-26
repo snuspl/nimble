@@ -78,7 +78,6 @@ struct TORCH_API GraphExecutor {
   }
   std::shared_ptr<Graph> graph() const;
   GraphExecutorState getDebugState();
-  void skipNonDiffOptimizations();
 
   static size_t getDefaultNumBailOuts();
 

@@ -68,10 +68,6 @@ struct GraphExecutorImplBase {
   void run(Stack& stack);
   c10::intrusive_ptr<Future> runAsync(Stack& stack);
   
-  void skipNonDiffOptimizations() {
-    kSkipNonDiffOptimizations = true;
-  };
-
   virtual ExecutionPlan getPlanFor(
       Stack& stack,
       size_t remaining_bailout_depth) = 0;
@@ -96,8 +92,6 @@ struct GraphExecutorImplBase {
   // GraphExecutors can be accessed from multiple threads, so this thread needs
   // to be held every time we access the fallback or plan_cache.
   std::mutex compile_mutex;
-
-  bool kSkipNonDiffOptimizations = false;
 };
 
 } // namespace jit

@@ -685,15 +685,12 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
           opt_graph,
           autodiff_subgraph_inlining ? autodiffSubgraphInlineThreshold : 1);
       GRAPH_DEBUG("After InlineAutodiffSubgraphs\n", *opt_graph);
-    } else {
-      if (!kSkipNonDiffOptimizations) {
-        runNondiffOptimization(opt_graph);
-      }
     }
     // Make sure there are no leftovers from any passes.
     EliminateDeadCode(opt_graph);
-    if (at::cuda::autostream::AutoStreamMode::is_enabled())
+    if (at::cuda::autostream::AutoStreamMode::is_enabled()) {
       AutoStream(opt_graph);
+    }
     GRAPH_DUMP("After compileSpec optimizations:", opt_graph);
     return ExecutionPlan(opt_graph, function_name_);
   }
@@ -753,10 +750,6 @@ TORCH_API bool IsNewExecutorEnabled() {
       std::getenv("TORCH_JIT_DISABLE_NEW_EXECUTOR");
   return getExecutorMode() && FLAGS_torch_jit_enable_new_executor &&
       !disable_new_executor;
-}
-
-void GraphExecutor::skipNonDiffOptimizations() {
-  pImpl->skipNonDiffOptimizations();
 }
 
 void runRequiredPasses(const std::shared_ptr<Graph>& g) {
