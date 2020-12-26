@@ -268,10 +268,15 @@ class torch_set_cudnn_enabled(object):
         return False
 
 
-def rewrite_graph(model, dummy_inputs, training=False, use_multi_stream=False):
+def rewrite_graph(model, dummy_inputs, training, use_multi_stream):
+    prev_executor_mode = torch._C._jit_set_profiling_executor(False)
+    prev_profiling_mode = torch._C._jit_set_profiling_mode(False)
+    
     if training:
         jit_model = torch.jit.trace(model, dummy_inputs).cuda().train(True)
-        torch._C._jit_clear_optimized_graph(jit_model._c)
+        torch._C._jit_clear_execution_info(jit_model._c)
+        torch._C._jit_required_passes(jit_model.graph)
+        torch._C._jit_pass_prepare_elementwise_op_fusion(jit_model._c)
 
         prev_autostream_mode = torch._C._cuda_getAutoStreamMode()
         torch._C._cuda_setAutoStreamMode(use_multi_stream)
@@ -284,10 +289,11 @@ def rewrite_graph(model, dummy_inputs, training=False, use_multi_stream=False):
 
         with torch.no_grad(), torch_set_cudnn_enabled(False):
             jit_model = torch.jit.trace(model, dummy_inputs).cuda().train(False)
+            
             # basic operator fusions
-            torch._C._jit_replace_graph_with_optimized_graph(jit_model._c, *dummy_inputs)
-            torch._C._jit_pass_fold_convbn_for_traced_module(jit_model._c)
-            torch._C._jit_pass_fold_conv_cat_bn_for_traced_module(jit_model._c)
+            torch._C._jit_clear_execution_info(jit_model._c)
+            torch._C._jit_required_passes(jit_model.graph)
+            torch._C._jit_pass_fold_conv_cat_bn(jit_model._c)
             torch._C._jit_pass_prepare_elementwise_op_fusion(jit_model._c)
 
             prev_autostream_mode = torch._C._cuda_getAutoStreamMode()
@@ -295,12 +301,14 @@ def rewrite_graph(model, dummy_inputs, training=False, use_multi_stream=False):
             jit_model(*dummy_inputs)
             torch._C._cuda_setAutoStreamMode(prev_autostream_mode)
 
+    torch._C._jit_set_profiling_executor(prev_executor_mode)
+    torch._C._jit_set_profiling_mode(prev_profiling_mode)
     return jit_model
 
 
 def tag_conv(module, x):
     def _dfs_traverse(module):
-        for _, submodule in module.named_children():
+        for submodule in module.children():
             if isinstance(submodule, torch.nn.Conv2d):
                 def tag_forward(self, input):
                     self.input = input
@@ -330,15 +338,15 @@ class MeasurableConv(object):
         self.forward_graph.inputs = (dummy_input,)
 
         with torch.no_grad(), torch.cuda.stream(stream):
-                torch._C._cuda_beginStreamPrecapture(stream._cdata, False)
-                for _ in range(self.iter_num):
-                    self.original_conv(dummy_input)
-                torch._C._cuda_endStreamPrecapture(stream._cdata)
-
-                torch._C._cuda_beginStreamCapture(stream._cdata, False, False)
-                for _ in range(self.iter_num):
-                    output = self.original_conv(dummy_input)
-                torch._C._cuda_endStreamCapture(stream._cdata, self.forward_graph)
+            torch._C._cuda_beginStreamPrecapture(stream._cdata, False)
+            for _ in range(self.iter_num):
+                self.original_conv(dummy_input)
+            torch._C._cuda_endStreamPrecapture(stream._cdata)
+            
+            torch._C._cuda_beginStreamCapture(stream._cdata, False, False)
+            for _ in range(self.iter_num):
+                output = self.original_conv(dummy_input)
+            torch._C._cuda_endStreamCapture(stream._cdata, self.forward_graph)
 
         self.forward_graph.outputs = (output.detach(),)
 
@@ -385,11 +393,11 @@ def benchmark_conv(module, x, warmup=10, num_iter=10):
 def select_conv(conv, x):
     def _cudnn_forward(self, input):
         with torch_set_cudnn_enabled(True):
-            return self.conv2d_forward(input, self.weight)
+            return self._conv_forward(input, self.weight)
 
     def _no_cudnn_forward(self, input):
         with torch_set_cudnn_enabled(False):
-            return self.conv2d_forward(input, self.weight)
+            return self._conv_forward(input, self.weight)
 
     # for dilated convolutions, use cuDNN
     if conv.dilation != (1, 1):
@@ -404,7 +412,7 @@ def run_conv_selection(module, x):
     tag_conv(module, x)
 
     def _dfs_traverse(module):
-        for name, submodule in module.named_children():
+        for submodule in module.children():
             if isinstance(submodule, torch.nn.Conv2d) and hasattr(submodule, 'input'):
                 selected_conv = select_conv(submodule, submodule.input)
                 submodule.forward = types.MethodType(selected_conv, submodule)
