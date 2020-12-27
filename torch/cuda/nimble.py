@@ -273,15 +273,16 @@ def rewrite_graph(model, dummy_inputs, training, use_multi_stream):
     prev_profiling_mode = torch._C._jit_set_profiling_mode(False)
     
     if training:
-        jit_model = torch.jit.trace(model, dummy_inputs).cuda().train(True)
-        torch._C._jit_clear_execution_info(jit_model._c)
-        torch._C._jit_required_passes(jit_model.graph)
-        torch._C._jit_pass_prepare_elementwise_op_fusion(jit_model._c)
+        with torch.enable_grad(), torch_set_cudnn_enabled(True):
+            jit_model = torch.jit.trace(model, dummy_inputs).cuda().train(True)
+            torch._C._jit_clear_execution_info(jit_model._c)
+            torch._C._jit_required_passes(jit_model.graph)
+            torch._C._jit_pass_prepare_elementwise_op_fusion(jit_model._c)
 
-        prev_autostream_mode = torch._C._cuda_getAutoStreamMode()
-        torch._C._cuda_setAutoStreamMode(use_multi_stream)
-        jit_model(*dummy_inputs)
-        torch._C._cuda_setAutoStreamMode(prev_autostream_mode)
+            prev_autostream_mode = torch._C._cuda_getAutoStreamMode()
+            torch._C._cuda_setAutoStreamMode(use_multi_stream)
+            jit_model(*dummy_inputs)
+            torch._C._cuda_setAutoStreamMode(prev_autostream_mode)
 
     else:
         # conv selection (only for inference)
