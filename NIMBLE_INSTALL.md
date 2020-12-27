@@ -2,9 +2,9 @@
 
 ## Prerequisites
 * anaconda3
-* cuda 10.2
-* cudnn 8.0.2 for cuda 10.2
-* tarball of TensorRT 7.1.3.4
+* cuda 11.0
+* cudnn 8.0.5 for cuda 11.0
+* tarball of TensorRT 7.2.2.3
 * Environment variables
 ```bash
 # create new conda environment
@@ -12,7 +12,7 @@ conda create -n nimble python=3.7 -y
 
 # environment variables, we need this setting for every installation and experiment
 conda activate nimble
-export CUDA_HOME=<YOUR_CUDA_10.2_PATH>
+export CUDA_HOME=<YOUR_CUDA_11.0_PATH>
 export CUDA_NVCC_EXECUTABLE=$CUDA_HOME/bin/nvcc
 export CUDNN_LIB_DIR=$CUDA_HOME/lib64
 export CUDNN_INCLUDE_DIR=$CUDA_HOME/include/
@@ -24,8 +24,8 @@ export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
 * Installing dependencies
 ```bash
 # ensure prerequisites for pytorch build
-conda install numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing -y
-conda install -c pytorch magma-cuda102 -y
+conda install numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses -y
+conda install -c pytorch magma-cuda110 -y
 
 # install onnx
 conda install -c conda-forge onnx -y

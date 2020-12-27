@@ -11,7 +11,7 @@ export LD_LIBRARY_PATH=$TENSORRT_HOME/lib:$LD_LIBRARY_PATH
 
 # install TensorRT for python
 cd $TENSORRT_HOME/python
-pip install tensorrt-7.1.3.4-cp37-none-linux_x86_64.whl
+pip install tensorrt-7.2.2.3-cp37-none-linux_x86_64.whl
 cd $TENSORRT_HOME/graphsurgeon
 pip install graphsurgeon-0.4.5-py2.py3-none-any.whl
 ```
