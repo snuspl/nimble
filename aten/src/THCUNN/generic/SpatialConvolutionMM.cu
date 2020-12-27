@@ -158,7 +158,9 @@ void THNN_(SpatialConvolutionMM_updateOutput)(
   THCTensor_(resize4d)(state, output, batchSize, nOutputPlane, outputHeight, outputWidth);
 
   // Resize temporary columns
-  THCTensor_(resize2d)(state, columns, nInputPlane*kW*kH, outputHeight*outputWidth);
+  if (kW != 1 || kH != 1) {
+    THCTensor_(resize2d)(state, columns, nInputPlane*kW*kH, outputHeight*outputWidth);
+  }
 
   // Define a buffer of ones, for bias accumulation
   // Note: this buffer can be shared with other modules, it only ever gets increased,
@@ -226,7 +228,7 @@ void THNN_(SpatialConvolutionMM_updateOutput)(
     // M,N,K are dims of matrix A and B
     // (see http://docs.nvidia.com/cuda/cublas/#cublas-lt-t-gt-gemm)
     int64_t m = nOutputPlane;
-    int64_t n = columns->size(1);
+    int64_t n = outputHeight*outputWidth;
     int64_t k = nInputPlane*kH*kW;
 
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
