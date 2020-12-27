@@ -685,6 +685,8 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
           opt_graph,
           autodiff_subgraph_inlining ? autodiffSubgraphInlineThreshold : 1);
       GRAPH_DEBUG("After InlineAutodiffSubgraphs\n", *opt_graph);
+    } else {
+      runNondiffOptimization(opt_graph);
     }
     // Make sure there are no leftovers from any passes.
     EliminateDeadCode(opt_graph);

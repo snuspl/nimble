@@ -1,3 +1,32 @@
+/*
+Copyright (c) 2020 Software Platform Lab
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. Neither the name of the Software Platform Lab nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include <torch/csrc/jit/passes/fold_conv_cat_bn.h>
 
 #include <torch/csrc/jit/api/module.h>
@@ -18,10 +47,10 @@ namespace {
 std::string conv_bn_pattern_string = R"IR(
 graph(%x, %conv_submodule, %conv_b, %stride:int[], %padding:int[], %dilation:int[],
       %transposed:bool, %output_padding:int[], %groups:int,
-      %benchmark:bool, %deterministic:bool, %cudnn_enabled:bool,
+      %benchmark:bool, %deterministic:bool, %cudnn_enabled:bool, %allow_tf32:bool,
       %bn_submodule, %training:bool, %momentum:float, %eps:float):
     %conv_w = prim::GetAttr[name="weight"](%conv_submodule)
-    %conv_out = aten::_convolution(%x, %conv_w, %conv_b, %stride, %padding, %dilation, %transposed, %output_padding, %groups, %benchmark, %deterministic, %cudnn_enabled)
+    %conv_out = aten::_convolution(%x, %conv_w, %conv_b, %stride, %padding, %dilation, %transposed, %output_padding, %groups, %benchmark, %deterministic, %cudnn_enabled, %allow_tf32)
     %bn_w = prim::GetAttr[name="weight"](%bn_submodule)
     %bn_b = prim::GetAttr[name="bias"](%bn_submodule)
     %running_mean = prim::GetAttr[name="running_mean"](%bn_submodule)
@@ -179,9 +208,6 @@ void FoldConvBatchNorm2d(const Module& module) {
     } else {
       // Instead of using "conv with bias", we add an extra node for bias addition.
       conv_submodule.register_parameter("_bias_from_folded_bn", std::get<1>(new_w_b).unsqueeze(0).unsqueeze(2).unsqueeze(3), false);
-      auto conv_module_t = matched_conv_submodule->output()->type()->expect<ClassType>();
-      conv_module_t->addAttribute("_bias_from_folded_bn", TensorType::get(), false);
-
       auto get_bias = top_graph->createGetAttr(matched_conv_submodule->output(), "_bias_from_folded_bn")->insertAfter(matched_conv);
       auto one = top_graph->insertConstant(1);
       auto add_bias = top_graph->create(aten::add, {matched_conv->output(), get_bias->output(), one})->insertAfter(get_bias);
@@ -370,9 +396,6 @@ void FoldConvCatBatchNorm2d(const Module& module) {
         Value* conv_module_val = conv_w->node()->input();
 
         conv_submodules[i].register_parameter("_bias_from_folded_cat_bn", std::get<1>(new_w_b)[i].unsqueeze(0).unsqueeze(2).unsqueeze(3), false);
-        auto conv_module_t = conv_module_val->type()->expect<ClassType>();
-        conv_module_t->addAttribute("_bias_from_folded_cat_bn", TensorType::get(), false);
-
         auto get_bias = graph->createGetAttr(conv_module_val, "_bias_from_folded_cat_bn")->insertAfter(conv);
         auto one = graph->insertConstant(1);
         auto add_bias = graph->create(aten::add, {conv->output(), get_bias->output(), one})->insertAfter(get_bias);
