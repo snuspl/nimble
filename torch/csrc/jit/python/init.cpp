@@ -725,14 +725,13 @@ void initJITBindings(PyObject* module) {
       })
       .def("_jit_required_passes",
           [](std::shared_ptr<Graph>& graph) {
-            auto opt_graph = graph->copy();
-            Inline(*opt_graph);
-            LowerSimpleTuples(opt_graph);
-            ConstantPooling(opt_graph);
-            runRequiredPasses(opt_graph);
-            ConstantPropagation(opt_graph);
-            EliminateDeadCode(opt_graph);
-            EliminateCommonSubexpression(opt_graph);
+            Inline(*graph);
+            LowerSimpleTuples(graph);
+            ConstantPooling(graph);
+            runRequiredPasses(graph);
+            ConstantPropagation(graph);
+            EliminateDeadCode(graph);
+            EliminateCommonSubexpression(graph);
       })
       .def("_jit_pass_fold_conv_cat_bn", &FoldConvCatBatchNorm2dForTracedModule)
       .def("_jit_pass_prepare_elementwise_op_fusion", &PrepareElementwiseOpFusion)
