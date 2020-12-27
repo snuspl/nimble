@@ -319,14 +319,14 @@ PyObject * THCPModule_memoryStats(PyObject *_unused, PyObject *arg)
   result["active_bytes"] = statArrayToDict(stats.active_bytes);
   result["inactive_split_bytes"] = statArrayToDict(stats.inactive_split_bytes);
   
-  const auto graphStatToDict = [=](const Stat& graphStat) {
+  const auto nimbleStatToDict = [=](const Stat& nimbleStat) {
     py::dict dict;
-    dict["all"] = statToDict(graphStat);
+    dict["all"] = statToDict(nimbleStat);
     return dict;
   };
 
-  result["graph_bytes"] = graphStatToDict(c10::cuda::CUDACachingAllocator::getGraphAllocatedBytes());
-  result["graph_allocation"] = graphStatToDict(c10::cuda::CUDACachingAllocator::getGraphAllocatedNums());
+  result["nimble_bytes"] = nimbleStatToDict(c10::cuda::CUDACachingAllocator::getGraphAllocatedBytes());
+  result["nimble_allocation"] = nimbleStatToDict(c10::cuda::CUDACachingAllocator::getGraphAllocatedNums());
 
   return result.release().ptr();
   END_HANDLE_TH_ERRORS
