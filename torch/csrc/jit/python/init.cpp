@@ -725,12 +725,20 @@ void initJITBindings(PyObject* module) {
       })
       .def("_jit_required_passes",
           [](std::shared_ptr<Graph>& graph) {
+            // compileSpec
             Inline(*graph);
             LowerSimpleTuples(graph);
             ConstantPooling(graph);
             runRequiredPasses(graph);
             ConstantPropagation(graph);
+            PropagateInputShapes(graph);
+
+            // runOptimization
             EliminateDeadCode(graph);
+            EliminateCommonSubexpression(graph);
+            PeepholeOptimize(graph);
+            ConstantPropagation(graph);
+            ConstantPooling(graph);
             EliminateCommonSubexpression(graph);
       })
       .def("_jit_pass_fold_conv_cat_bn", &FoldConvCatBatchNorm2dForTracedModule)
