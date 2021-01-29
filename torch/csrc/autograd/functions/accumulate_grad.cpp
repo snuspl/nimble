@@ -6,6 +6,8 @@
 #include <torch/csrc/autograd/functions/tensor.h>
 #include <torch/csrc/autograd/functions/utils.h>
 
+#include <c10/cuda/CUDAStream.h>
+
 #include <cstdint>
 #include <stdexcept>
 #include <utility>
@@ -58,6 +60,22 @@ auto AccumulateGrad::apply(variable_list&& grads) -> variable_list {
       1 + !post_hooks().empty() /* num_expected_refs */,
       [&grad](at::Tensor&& grad_update) { grad = std::move(grad_update); });
 
+  if (captured_stream && at::cuda::getCurrentCUDAStream().is_capturing()){
+    captured_stream = c10::nullopt;
+  }
+
   return variable_list();
 }
+  
+c10::optional<c10::Stream> AccumulateGrad::stream(const c10::DeviceType device_type) {
+  if (captured_stream) {
+    return captured_stream;
+  } else {
+    for (const auto& metadata : input_metadata_) {
+      if (metadata.device().type() == device_type) return metadata.stream();
+    }
+    return c10::nullopt;
+  }
+}
+
 }} // namespace torch::autograd

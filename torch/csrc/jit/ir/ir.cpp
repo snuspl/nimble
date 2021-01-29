@@ -1058,6 +1058,8 @@ bool Node::hasSideEffects() const {
     case aten::wait: // It can represent RPC message received.
     case prim::Enter:
     case prim::Exit:
+    case prim::SetStream:
+    case prim::RecordEvent:
       return true;
   }
 

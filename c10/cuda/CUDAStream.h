@@ -173,6 +173,14 @@ public:
   // Deleted for now; use CUDAEvent::block instead
   // void synchronize_with(const CUDAEvent& event) const;
 
+  bool is_capture_stream() const;
+
+  bool is_capturing() const {
+    cudaStreamCaptureStatus stream_status;
+    C10_CUDA_CHECK(cudaStreamIsCapturing(*this, &stream_status));
+    return stream_status == cudaStreamCaptureStatusActive;
+  }
+  
 private:
   Stream stream_;
 };
@@ -189,6 +197,15 @@ private:
  */
 CAFFE2_API CUDAStream
 getStreamFromPool(const bool isHighPriority = false, DeviceIndex device = -1);
+
+
+/**
+ * Get a stream from the CUDA stream pool dedicated for stream capture.
+ * If isOrigin is true, this function will always return a stream at index 0 of
+ * the pool.
+ */
+CAFFE2_API CUDAStream
+getCaptureStreamFromPool(const bool isOrigin = false, DeviceIndex device = -1);
 
 /**
  * Get the default CUDA stream, for the passed CUDA device, or for the

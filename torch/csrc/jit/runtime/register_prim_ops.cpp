@@ -3,6 +3,8 @@
 #include <torch/csrc/jit/runtime/register_ops_utils.h>
 #include <torch/library.h>
 
+#include <ATen/cuda/AutoStream.h>
+
 #include <algorithm>
 #include <bitset>
 #include <cctype>
@@ -633,6 +635,24 @@ RegisterOperators reg(
      OperatorGenerator(
          TORCH_SELECTIVE_SCHEMA("prim::Uninitialized() -> Any"),
          [](Stack* stack) { push(stack, IValue::uninitialized()); },
+         aliasAnalysisSpecialCase()),
+     OperatorGenerator(
+         TORCH_SELECTIVE_SCHEMA("prim::SetStream(int a, int[] b) -> ()"),
+         [](Stack& stack) {
+           const auto& parent_ids = pop(stack).toIntList();
+           int stream_idx = pop(stack).toInt();
+           at::cuda::autostream::set_stream(stream_idx, parent_ids);
+           return 0;
+         },
+         aliasAnalysisSpecialCase()),
+     OperatorGenerator(
+         TORCH_SELECTIVE_SCHEMA("prim::RecordEvent(int a, int b) -> ()"),
+         [](Stack& stack) {
+           int stream_idx = pop(stack).toInt();
+           int node_id = pop(stack).toInt();
+           at::cuda::autostream::record_event(node_id, stream_idx);
+           return 0;
+         },
          aliasAnalysisSpecialCase()),
      OperatorGenerator(
          TORCH_SELECTIVE_SCHEMA("prim::Print(...) -> ()"),

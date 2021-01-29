@@ -420,6 +420,8 @@ def memory_summary(device: Union[Device, int] = None, abbreviated: bool = False)
         ("active", "Active allocs", _format_count),
         ("segment", "GPU reserved segments", _format_count),
         ("inactive_split", "Non-releasable allocs", _format_count),
+        ("nimble_bytes", "Nimble held memory", _format_size),
+        ("nimble_allocation", "Nimble allocs", _format_count),
     ]
 
     lines = []
@@ -433,7 +435,7 @@ def memory_summary(device: Union[Device, int] = None, abbreviated: bool = False)
     for metric_key, metric_name, formatter in metrics_to_display:
         lines.append("-" * 75)
         submetrics = [("all", metric_name)]
-        if not abbreviated:
+        if not abbreviated and not "nimble" in metric_key:
             submetrics.append(("large_pool", "      from large pool"))
             submetrics.append(("small_pool", "      from small pool"))
 

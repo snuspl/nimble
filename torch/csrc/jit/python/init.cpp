@@ -2,6 +2,7 @@
 #include <torch/csrc/utils/python_arg_parser.h>
 
 #include <torch/csrc/jit/api/module.h>
+#include <torch/csrc/jit/api/function_impl.h>
 #include <torch/csrc/jit/backends/backend_init.h>
 #include <torch/csrc/jit/codegen/fuser/interface.h>
 #include <torch/csrc/jit/codegen/fuser/kernel_cache.h>
@@ -20,6 +21,7 @@
 #include <torch/csrc/jit/passes/decompose_ops.h>
 #include <torch/csrc/jit/passes/erase_number_types.h>
 #include <torch/csrc/jit/passes/fold_conv_bn.h>
+#include <torch/csrc/jit/passes/fold_conv_cat_bn.h>
 #include <torch/csrc/jit/passes/freeze_module.h>
 #include <torch/csrc/jit/passes/fuse_linear.h>
 #include <torch/csrc/jit/passes/fuse_relu.h>
@@ -45,6 +47,7 @@
 #include <torch/csrc/jit/passes/onnx/shape_type_inference.h>
 #include <torch/csrc/jit/passes/onnx/unpack_quantized_weights.h>
 #include <torch/csrc/jit/passes/peephole.h>
+#include <torch/csrc/jit/passes/prepare_elementwise_op_fusion.h>
 #include <torch/csrc/jit/passes/quantization/dedup_module_uses.h>
 #include <torch/csrc/jit/passes/quantization/finalize.h>
 #include <torch/csrc/jit/passes/quantization/fusion_passes.h>
@@ -719,7 +722,36 @@ void initJITBindings(PyObject* module) {
                 c10::nullopt));
           }
         }
-      });
+      })
+      .def("_jit_required_passes",
+          [](std::shared_ptr<Graph>& graph) {
+            // compileSpec
+            Inline(*graph);
+            LowerSimpleTuples(graph);
+            ConstantPooling(graph);
+            runRequiredPasses(graph);
+            ConstantPropagation(graph);
+            PropagateInputShapes(graph);
+
+            // runOptimization
+            EliminateDeadCode(graph);
+            EliminateCommonSubexpression(graph);
+            PeepholeOptimize(graph);
+            ConstantPropagation(graph);
+            ConstantPooling(graph);
+            EliminateCommonSubexpression(graph);
+      })
+      .def("_jit_pass_fold_conv_cat_bn", &FoldConvCatBatchNorm2dForTracedModule)
+      .def("_jit_pass_prepare_elementwise_op_fusion", &PrepareElementwiseOpFusion)
+      .def("_jit_clear_execution_info",
+          [](py::args args, py::kwargs kwargs) {
+            // see: [pybind11 varargs]
+            auto tracing_state = tracer::getTracingState();
+            TORCH_INTERNAL_ASSERT(!tracing_state);
+            script::Module& module = py::cast<script::Module&>(args[0]);
+            script::Method forward = module.get_method("forward");
+            forward.function().clear_execution_info();
+          });
 
   // NOLINTNEXTLINE(bugprone-unused-raii)
   py::class_<CompleteArgumentSpec>(m, "CompleteArgumentSpec")

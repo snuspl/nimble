@@ -5,6 +5,8 @@
 #include <c10/core/Event.h>
 #include <c10/util/Optional.h>
 
+#include <c10/cuda/CUDAStream.h>
+
 #include <cstddef>
 #include <utility>
 #include <vector>
@@ -83,10 +85,18 @@ namespace torch { namespace autograd {
       if (on_consumer && !on_producer) {
         // (3a)
         opt_accumulate_stream = opt_consumer_stream;
-        opt_sync_stream = guard.getDefaultStream(opt_consumer_stream->device());
+        if (c10::cuda::CUDAStream(*opt_consumer_stream).is_capture_stream()) {
+          opt_sync_stream = c10::cuda::getCaptureStreamFromPool(true).unwrap();
+        } else {
+          opt_sync_stream = guard.getDefaultStream(opt_consumer_stream->device());
+        }
       } else if (on_producer && !on_consumer) {
         // (4a)
-        opt_accumulate_stream = guard.getDefaultStream(opt_producer_stream->device());
+        if (c10::cuda::CUDAStream(*opt_producer_stream).is_capture_stream()) {
+          opt_accumulate_stream = c10::cuda::getCaptureStreamFromPool(true).unwrap();
+        } else {
+          opt_accumulate_stream = guard.getDefaultStream(opt_producer_stream->device());
+        }
         opt_sync_stream = opt_producer_stream;
       } else {
         // (5)

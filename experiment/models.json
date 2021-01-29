@@ -1,0 +1,20 @@
+{
+    "torchvision": [
+        "resnet50",
+        "resnet101",
+        "inception_v3",
+        "mobilenet_v2"
+    ],
+    "pretrainedmodels": [
+        "nasnetalarge",
+        "nasnetamobile"
+    ],
+    "timm": [
+        "efficientnet_b0",
+        "efficientnet_b5"
+    ],
+    "darts": [
+        "darts",
+        "amoebanet"
+    ]
+}

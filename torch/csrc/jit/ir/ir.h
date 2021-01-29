@@ -276,6 +276,8 @@ struct TORCH_API Node {
  protected:
   Node(Graph* graph_, NodeKind kind_); // defined after graph
  public:
+  int node_id = -1;
+
   // each node but Return/Param
   // is associated with exactly one place in the node list...
   // of the graph_
