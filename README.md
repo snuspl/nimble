@@ -23,6 +23,9 @@ Nimble improves the speed of inference and training by up to 22.34× and 3.61× 
   Training performance comparison on an NVIDIA V100 GPU.
 </p>
 
+## Version
+
+This version of Nimble is built on top of PyTorch v1.7.1 with CUDA 11.0. If you want to see the old version of Nimble we used for our experiments in the paper, please checkout to `main_pytorch_v1.4.1`.
 
 ## Install Nimble
 
