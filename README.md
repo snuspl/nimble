@@ -23,6 +23,9 @@ Nimble improves the speed of inference and training by up to 22.34× and 3.61× 
   Training performance comparison on an NVIDIA V100 GPU.
 </p>
 
+## Version
+
+This version of Nimble is built on top of PyTorch v1.4.1 with CUDA 10.2. *All of our experiments and evaluations in the paper were conducted using this version.* Please check other branches if you want supports for the newer versions of PyTorch.
 
 ## Install Nimble
 
@@ -65,7 +68,7 @@ import torchvision
 BATCH = 32
 
 # Instantiate a PyTorch Module and move it to a GPU
-model = torchvision.models.mobilenet_v2(num_classes=10)
+model = torchvision.models.resnet50(num_classes=10)
 model = model.cuda()
 model.train()
 
@@ -119,8 +122,8 @@ Woosuk Kwon*, Gyeong-In Yu*, Eunji Jeong, and Byung-Gon Chun (* equal contributi
 Create an issue for questions and bug reports.
 
 ## Contribution
-We welcome your contributions to Nimble! We aim to create an open-source project that is contributed by the open-source community. 
-For general discussions about development, please subscribe to nimble-discuss@googlegroups.com. 
+We welcome your contributions to Nimble! We aim to create an open-source project that is contributed by the open-source community.
+For general discussions about development, please subscribe to nimble-discuss@googlegroups.com.
 
 ## License
 [BSD 3-clause license](LICENSE)
