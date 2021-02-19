@@ -8,7 +8,7 @@ Nimble improves the speed of inference and training by up to 22.34× and 3.61× 
 * Speedup in Inference (ImageNet models)
 
 <div align="center">
-  <img src="https://github.com/snuspl/nimble/blob/main/figures/inference.png">
+  <img src="https://github.com/snuspl/nimble/blob/main_pytorch_v1.4.1/figures/inference.png">
   <br/>
   Inference performance comparison on an NVIDIA V100 GPU.
 </div>
@@ -17,7 +17,7 @@ Nimble improves the speed of inference and training by up to 22.34× and 3.61× 
 
 | Batch 32 |  Batch 64 | Batch 128 |
 |:---:|:---:|:---:|
-| <img src="https://github.com/snuspl/nimble/blob/main/figures/batch_32.png"> | <img src="https://github.com/snuspl/nimble/blob/main/figures/batch_64.png"> | <img src="https://github.com/snuspl/nimble/blob/main/figures/batch_128.png"> |
+| <img src="https://github.com/snuspl/nimble/blob/main_pytorch_v1.4.1/figures/batch_32.png"> | <img src="https://github.com/snuspl/nimble/blob/main_pytorch_v1.4.1/figures/batch_64.png"> | <img src="https://github.com/snuspl/nimble/blob/main_pytorch_v1.4.1/figures/batch_128.png"> |
 
 <p align="middle">
   Training performance comparison on an NVIDIA V100 GPU.
