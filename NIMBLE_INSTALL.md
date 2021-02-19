@@ -1,10 +1,11 @@
 # Nimble Installation Guide
 
+NOTE: This version of Nimble supports PyTorch v1.7.1 with CUDA 11.0. If you need supports for the different versions of PyTorch, please check other branches.
+
 ## Prerequisites
 * anaconda3
 * cuda 11.0
 * cudnn 8.0.5 for cuda 11.0
-* tarball of TensorRT 7.2.2.3
 * Environment variables
 ```bash
 # create new conda environment
