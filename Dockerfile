@@ -47,12 +47,9 @@ RUN --mount=type=cache,target=/opt/ccache \
     TORCH_CUDA_ARCH_LIST="3.5 5.2 6.0 6.1 7.0+PTX 8.0" TORCH_NVCC_FLAGS="-Xfatbin -compress-all" \
     CMAKE_PREFIX_PATH="$(dirname $(which conda))/../" \
     python setup.py install
-
-FROM conda as conda-installs
-ARG INSTALL_CHANNEL=pytorch-nightly
-RUN /opt/conda/bin/conda install -c "${INSTALL_CHANNEL}" -y pytorch torchvision cudatoolkit=11.0.221 && \
-    /opt/conda/bin/conda clean -ya
-RUN /opt/conda/bin/pip install torchelastic
+WORKDIR /opt/pytorch/experiment/torchvision
+RUN --mount=type=cache,target=/opt/ccache \
+    python setup.py install
 
 FROM ${BASE_IMAGE} as official
 LABEL com.nvidia.volumes.needed="nvidia_driver"
@@ -62,7 +59,7 @@ RUN --mount=type=cache,id=apt-final,target=/var/cache/apt \
         libjpeg-dev \
         libpng-dev && \
     rm -rf /var/lib/apt/lists/*
-COPY --from=conda-installs /opt/conda /opt/conda
+COPY --from=conda /opt/conda /opt/conda
 ENV PATH /opt/conda/bin:$PATH
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
@@ -70,5 +67,4 @@ ENV LD_LIBRARY_PATH /usr/local/nvidia/lib:/usr/local/nvidia/lib64
 WORKDIR /workspace
 
 FROM official as dev
-# Should override the already installed version from the official-image stage
 COPY --from=build /opt/conda /opt/conda
